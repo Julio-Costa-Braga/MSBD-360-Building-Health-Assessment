@@ -18,9 +18,13 @@ def _run_migrations():
 
         alembic_cfg = Config("alembic.ini")
         command.upgrade(alembic_cfg, "head")
+        return
     except Exception as e:
-        print(f"[startup] Alembic migration skipped: {e}")
+        print(f"[startup] Alembic migration failed: {e}")
+    try:
         Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"[startup] create_all failed (DB may not be ready): {e}")
 
 
 def _seed_recommendations():
