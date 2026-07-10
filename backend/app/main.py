@@ -106,3 +106,27 @@ app.include_router(reports.router, prefix=settings.api_v1_prefix)
 @app.get("/health")
 def health_check():
     return {"status": "ok", "app": settings.app_name}
+
+
+@app.get("/health/db")
+def health_db():
+    """Test database connection and report which URL is being used."""
+    from sqlalchemy import text
+
+    info = {
+        "database_url_configured": bool(settings.database_url),
+        "resolved_url_start": settings.resolved_database_url[:50] + "...",
+        "using_sqlite": "sqlite" in settings.resolved_database_url,
+    }
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+            info["connection"] = "ok"
+            result = db.execute(
+                text("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
+            ).fetchall()
+            info["tables"] = [r[0] for r in result]
+    except Exception as e:
+        info["connection"] = "error"
+        info["error"] = str(e)
+    return info

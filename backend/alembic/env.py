@@ -12,7 +12,7 @@ config = context.config
 config.set_section_option(
     config.config_ini_section,
     "sqlalchemy.url",
-    settings.database_url.replace("%", "%%"),
+    settings.resolved_database_url.replace("%", "%%"),
 )
 
 if config.config_file_name is not None:
