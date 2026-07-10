@@ -38,12 +38,10 @@ export default function Dashboard() {
       ISA: i.overall_isa_score,
     }))
 
-  const completedCount = inspections.filter((i) => i.status === 'completed').length
-  const avgScore = inspections
-    .filter((i) => i.overall_isa_score !== null)
-    .reduce((acc, i) => acc + (i.overall_isa_score || 0), 0)
-  const avgScoreDisplay = completedCount > 0
-    ? (avgScore / completedCount).toFixed(1)
+  const scoredInspections = inspections.filter((i) => i.overall_isa_score !== null)
+  const avgScore = scoredInspections.reduce((acc, i) => acc + (i.overall_isa_score || 0), 0)
+  const avgScoreDisplay = scoredInspections.length > 0
+    ? (avgScore / scoredInspections.length).toFixed(1)
     : '—'
 
   return (
@@ -57,7 +55,7 @@ export default function Dashboard() {
         </div>
         <div className="bg-white rounded-xl shadow p-5 border border-gray-200">
           <p className="text-sm text-gray-500">Concluídas</p>
-          <p className="text-3xl font-bold mt-1">{completedCount}</p>
+          <p className="text-3xl font-bold mt-1">{inspections.filter((i) => i.status === 'completed').length}</p>
         </div>
         <div className="bg-white rounded-xl shadow p-5 border border-gray-200">
           <p className="text-sm text-gray-500">ISA Médio</p>
