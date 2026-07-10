@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Download, Plus, Trash2 } from 'lucide-react'
+import { Download, Plus, Trash2, X } from 'lucide-react'
 import api from '../api/client'
 import { Inspection, ISAByTypeResult, ISAResult, Measurement, Room } from '../types'
 import ISAGauge from '../components/ISAGauge'
@@ -58,6 +58,9 @@ export default function InspectionDetail() {
   const [saving, setSaving] = useState(false)
   const [activeMeasSub, setActiveMeasSub] = useState<string>('')
   const [showPhotos, setShowPhotos] = useState(false)
+  const [showNewRoom, setShowNewRoom] = useState(false)
+  const [newRoomName, setNewRoomName] = useState('')
+  const [newRoomType, setNewRoomType] = useState('bedroom')
 
   const fetchInspection = () => {
     api.get(`/inspections/${id}`).then((res) => setInspection(res.data))
@@ -110,28 +113,20 @@ export default function InspectionDetail() {
   }, [activeRoom])
 
   const handleAddRoom = async () => {
-    const name = prompt('Nome do cômodo:')
-    if (!name) return
-    const typeMap: Record<string, string> = {
-      'quarto': 'bedroom',
-      'sala': 'living_room',
-      'cozinha': 'kitchen',
-      'banheiro': 'bathroom',
-      'escritorio': 'office',
-      'corredor': 'hallway',
-      'porao': 'basement',
-      'sotao': 'attic',
-      'outro': 'other',
+    setNewRoomName('')
+    setNewRoomType('bedroom')
+    setShowNewRoom(true)
+  }
+
+  const handleSubmitRoom = async () => {
+    if (!newRoomName.trim()) return
+    try {
+      await api.post(`/inspections/${id}/rooms`, { name: newRoomName.trim(), room_type: newRoomType, floor_level: 0 })
+      setShowNewRoom(false)
+      fetchRooms()
+    } catch (e: any) {
+      alert('Erro ao criar cômodo. Verifique o nome e tipo.')
     }
-    const typeInput = prompt(
-      'Tipo do cômodo:\n' +
-      'quarto / sala / cozinha / banheiro / escritorio / corredor / porao / sotao / outro',
-      'quarto'
-    )
-    if (!typeInput) return
-    const roomType = typeMap[typeInput.toLowerCase().trim()] || typeInput
-    await api.post(`/inspections/${id}/rooms`, { name, room_type: roomType, floor_level: 0 })
-    fetchRooms()
   }
 
   const handleDeleteRoom = async (roomId: number) => {
@@ -172,6 +167,15 @@ export default function InspectionDetail() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleDeleteMeasurement = async (measurementId: number) => {
+    if (!confirm('Remover esta medição?')) return
+    try {
+      await api.delete(`/rooms/${activeRoom}/measurements/${measurementId}`)
+      fetchMeasurements(activeRoom!)
+      fetchISA()
+    } catch {}
   }
 
   const handleDownloadPDF = () => {
@@ -219,6 +223,50 @@ export default function InspectionDetail() {
           </button>
         </div>
       </div>
+
+      {/* New Room Form Modal */}
+      {showNewRoom && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Novo Cômodo</h3>
+              <button onClick={() => setShowNewRoom(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Nome do cômodo</label>
+                <input
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  placeholder="Ex: Sala Principal"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Tipo do cômodo</label>
+                <select
+                  value={newRoomType}
+                  onChange={(e) => setNewRoomType(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                >
+                  {Object.entries(ROOM_TYPES).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={handleSubmitRoom}
+                className="w-full bg-slate-800 text-white py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors"
+              >
+                Criar Cômodo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isaByType && (
         <div className="bg-white rounded-xl shadow p-5 border border-gray-200">
@@ -377,15 +425,21 @@ export default function InspectionDetail() {
                           <p className="text-xs font-semibold text-blue-600 mb-1">
                             {SUB_LOCATIONS.find(sl => sl.value === loc)?.label || 'Geral'} ({ms.length})
                           </p>
-                          {[...ms].reverse().slice(0, 5).map((m) => (
-                            <div key={m.id} className="text-xs text-gray-500 flex gap-2 border-b border-gray-50 py-0.5">
-                              <span className="text-gray-400 w-16 shrink-0">
+                          {[...ms].reverse().slice(0, 10).map((m) => (
+                            <div key={m.id} className="text-xs text-gray-500 flex gap-1 items-center border-b border-gray-50 py-0.5">
+                              <span className="text-gray-400 w-14 shrink-0">
                                 {new Date(m.measured_at).toLocaleTimeString('pt-BR')}
                               </span>
-                              <span>{m.temperature ?? '—'}°C</span>
-                              <span>{m.relative_humidity ?? '—'}%</span>
-                              <span>{m.co2 ?? '—'}ppm</span>
-                              <span>{m.illuminance ?? '—'}lux</span>
+                              <span className="w-10">{m.temperature ?? '—'}°C</span>
+                              <span className="w-10">{m.relative_humidity ?? '—'}%</span>
+                              <span className="w-12">{m.co2 ?? '—'}ppm</span>
+                              <span className="w-10">{m.illuminance ?? '—'}lux</span>
+                              <button
+                                onClick={() => handleDeleteMeasurement(m.id)}
+                                className="ml-auto text-red-300 hover:text-red-500"
+                              >
+                                <Trash2 size={11} />
+                              </button>
                             </div>
                           ))}
                         </div>
