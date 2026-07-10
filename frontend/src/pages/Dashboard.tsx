@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { ClipboardList, Eye } from 'lucide-react'
+import { ClipboardList, Eye, Trash2 } from 'lucide-react'
 import api from '../api/client'
 import { InspectionListItem } from '../types'
 
@@ -9,11 +9,25 @@ export default function Dashboard() {
   const [inspections, setInspections] = useState<InspectionListItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const fetchInspections = () => {
     api.get('/inspections').then((res) => {
       setInspections(res.data)
     }).finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    fetchInspections()
   }, [])
+
+  const handleDelete = async (id: number, name: string) => {
+    if (!confirm(`Remover a inspeção de "${name}"? Todas as medições e fotos serão excluídas.`)) return
+    try {
+      await api.delete(`/inspections/${id}`)
+      fetchInspections()
+    } catch {
+      alert('Erro ao excluir inspeção.')
+    }
+  }
 
   const chartData = inspections
     .filter((i) => i.overall_isa_score !== null)
@@ -89,17 +103,14 @@ export default function Dashboard() {
           <ul className="divide-y divide-gray-100">
             {inspections.slice(0, 10).map((insp) => (
               <li key={insp.id}>
-                <Link
-                  to={`/inspections/${insp.id}`}
-                  className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
-                >
-                  <div>
+                <div className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
+                  <Link to={`/inspections/${insp.id}`} className="flex-1 min-w-0">
                     <p className="font-medium">{insp.client_name}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 truncate">
                       {insp.property_address} — {insp.inspector_name}
                     </p>
-                  </div>
-                  <div className="flex items-center gap-3">
+                  </Link>
+                  <div className="flex items-center gap-3 shrink-0 ml-4">
                     <span className={`text-sm font-medium ${insp.overall_isa_score !== null ? '' : 'text-gray-400'}`}>
                       {insp.overall_isa_score !== null ? `ISA: ${insp.overall_isa_score}` : 'Rascunho'}
                     </span>
@@ -110,9 +121,17 @@ export default function Dashboard() {
                     }`}>
                       {insp.status === 'completed' ? 'Concluído' : 'Rascunho'}
                     </span>
-                    <Eye size={16} className="text-gray-400" />
+                    <Link to={`/inspections/${insp.id}`}>
+                      <Eye size={16} className="text-gray-400 hover:text-gray-600" />
+                    </Link>
+                    <button
+                      onClick={() => handleDelete(insp.id, insp.client_name)}
+                      className="text-red-300 hover:text-red-500"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                </Link>
+                </div>
               </li>
             ))}
           </ul>
