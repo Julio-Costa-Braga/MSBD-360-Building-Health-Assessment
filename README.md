@@ -122,5 +122,28 @@ alembic upgrade head
 ## Sugestões de Hospedagem
 
 - **Frontend**: Vercel (deploy automático via git)
-- **Backend**: Railway ou Render (suportam FastAPI nativamente)
+- **Backend**: Render (suporta FastAPI nativamente)
 - **Banco**: Supabase (PostgreSQL gerenciado, free tier)
+
+## Configuração de produção
+
+### Backend (Render)
+
+Defina estas variáveis de ambiente no Render:
+
+```env
+DATABASE_URL=postgresql://postgres:senha@db.seu-projeto.supabase.co:5432/postgres?sslmode=require
+DEBUG=false
+```
+
+O backend tentará aplicar as migrações automaticamente ao subir. Se não houver migrações, ele cria as tabelas com base nos modelos.
+
+### Frontend (Vercel)
+
+Defina no Vercel:
+
+```env
+VITE_API_URL=https://seu-backend.onrender.com/api/v1
+```
+
+Se preferir, pode deixar o frontend apontando para o backend do Render após o deploy.
