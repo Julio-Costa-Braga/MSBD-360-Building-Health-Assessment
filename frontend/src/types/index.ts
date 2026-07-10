@@ -75,7 +75,19 @@ export interface Photo {
   room_id: number
   file_path: string
   caption: string | null
+  photo_type: string | null
+  photo_data: string | null
   taken_at: string
+}
+
+export interface PhotoCreate {
+  caption?: string
+  photo_type: string
+  photo_data: string
+}
+
+export interface PhotoBulkCreate {
+  photos: PhotoCreate[]
 }
 
 export interface PillarScore {
@@ -95,4 +107,16 @@ export interface ISAResult {
   overall_score: number
   category: string
   rooms: RoomISAResult[]
+}
+
+export interface ISAByTypeRoomGroup {
+  average_score: number
+  category: string
+  rooms: RoomISAResult[]
+}
+
+export interface ISAByTypeResult {
+  overall_score: number
+  category: string
+  by_type: Record<string, ISAByTypeRoomGroup>
 }

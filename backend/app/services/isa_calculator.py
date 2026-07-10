@@ -234,3 +234,45 @@ class ISACalculator:
                 for r in room_results
             ],
         }
+
+    def calculate_by_room_type(self, rooms_data: list[dict]) -> dict:
+        """Calculate ISA grouped by room type."""
+        type_results: dict[str, list[dict]] = {}
+        for room in rooms_data:
+            rt = room.get("room_type", "other")
+            if rt not in type_results:
+                type_results[rt] = []
+            room_result = self.calculate_room(
+                room_id=room["id"],
+                room_name=room["name"],
+                measurements=room.get("measurements", []),
+                photo_count=len(room.get("photos", [])),
+            )
+            type_results[rt].append({
+                "room_id": room_result.room_id,
+                "room_name": room_result.room_name,
+                "overall_score": room_result.overall_score,
+                "category": room_result.category,
+                "pillars": {
+                    k: {"score": v.score, "details": v.details}
+                    for k, v in room_result.pillars.items()
+                },
+            })
+
+        grouped = {}
+        for rt, rooms in type_results.items():
+            avg = round(sum(r["overall_score"] for r in rooms) / len(rooms), 1)
+            grouped[rt] = {
+                "average_score": avg,
+                "category": score_to_category(avg),
+                "rooms": rooms,
+            }
+
+        all_scores = [r["overall_score"] for rooms in type_results.values() for r in rooms]
+        overall = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0.0
+
+        return {
+            "overall_score": overall,
+            "category": score_to_category(overall),
+            "by_type": grouped,
+        }

@@ -51,6 +51,40 @@ def get_isa(inspection_id: int, db: Session = Depends(get_db)):
     return result
 
 
+@router.get("/isa-by-type")
+def get_isa_by_type(inspection_id: int, db: Session = Depends(get_db)):
+    inspection = db.query(Inspection).filter(Inspection.id == inspection_id).first()
+    if not inspection:
+        raise HTTPException(404, "Inspeção não encontrada")
+
+    rooms = db.query(Room).filter(Room.inspection_id == inspection_id).all()
+    rooms_data = []
+    for room in rooms:
+        measurements = db.query(Measurement).filter(Measurement.room_id == room.id).all()
+        photos = db.query(Photo).filter(Photo.room_id == room.id).all()
+        rooms_data.append({
+            "id": room.id,
+            "name": room.name,
+            "room_type": room.room_type,
+            "measurements": [
+                {
+                    "temperature": m.temperature,
+                    "relative_humidity": m.relative_humidity,
+                    "co2": m.co2,
+                    "surface_temperature": m.surface_temperature,
+                    "material_moisture": m.material_moisture,
+                    "illuminance": m.illuminance,
+                    "observations": m.observations,
+                }
+                for m in measurements
+            ],
+            "photos": [{"id": p.id} for p in photos],
+        })
+
+    result = calculator.calculate_by_room_type(rooms_data)
+    return result
+
+
 @router.get("/pdf")
 def download_pdf(inspection_id: int, db: Session = Depends(get_db)):
     inspection = db.query(Inspection).filter(Inspection.id == inspection_id).first()
@@ -82,12 +116,18 @@ def download_pdf(inspection_id: int, db: Session = Depends(get_db)):
 
     isa_result = calculator.calculate_inspection(rooms_data)
 
+    insp_date = inspection.inspection_date
+    if hasattr(insp_date, "strftime"):
+        formatted_date = insp_date.strftime("%d/%m/%Y")
+    else:
+        formatted_date = str(insp_date)
+
     insp_dict = {
         "id": inspection.id,
         "client_name": inspection.client_name,
         "property_address": inspection.property_address,
         "inspector_name": inspection.inspector_name,
-        "inspection_date": inspection.inspection_date.isoformat(),
+        "inspection_date": formatted_date,
     }
 
     pdf_bytes = generate_report(insp_dict, isa_result)

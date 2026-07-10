@@ -11,6 +11,40 @@ from app.routers import inspections, measurements, photos, reports, rooms
 from app.utils.enums import RecommendationPriority
 
 
+def _add_missing_columns():
+    """Add missing columns via raw SQL as fallback when Alembic fails."""
+    try:
+        with engine.connect() as conn:
+            is_sqlite = "sqlite" in settings.resolved_database_url
+            changes = []
+
+            def get_cols(table):
+                if is_sqlite:
+                    rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+                    return [r[1] for r in rows]
+                rows = conn.execute(text(
+                    f"SELECT column_name FROM information_schema.columns WHERE table_name='{table}'"
+                )).fetchall()
+                return [r[0] for r in rows]
+
+            if "sub_location" not in get_cols("measurements"):
+                conn.execute(text("ALTER TABLE measurements ADD COLUMN sub_location VARCHAR(50)"))
+                changes.append("measurements.sub_location")
+
+            if "photo_type" not in get_cols("photos"):
+                conn.execute(text("ALTER TABLE photos ADD COLUMN photo_type VARCHAR(20) DEFAULT 'after'"))
+                changes.append("photos.photo_type")
+            if "photo_data" not in get_cols("photos"):
+                conn.execute(text("ALTER TABLE photos ADD COLUMN photo_data TEXT"))
+                changes.append("photos.photo_data")
+
+            if changes:
+                conn.commit()
+                print(f"[startup] Added missing columns: {changes}")
+    except Exception as e:
+        print(f"[startup] Raw SQL fallback failed: {e}")
+
+
 def _run_migrations():
     try:
         from alembic.config import Config
@@ -18,13 +52,16 @@ def _run_migrations():
 
         alembic_cfg = Config("alembic.ini")
         command.upgrade(alembic_cfg, "head")
+        print("[startup] Alembic migration succeeded")
         return
     except Exception as e:
         print(f"[startup] Alembic migration failed: {e}")
     try:
         Base.metadata.create_all(bind=engine)
+        print("[startup] create_all succeeded")
     except Exception as e:
         print(f"[startup] create_all failed (DB may not be ready): {e}")
+    _add_missing_columns()
 
 
 def _seed_recommendations():
