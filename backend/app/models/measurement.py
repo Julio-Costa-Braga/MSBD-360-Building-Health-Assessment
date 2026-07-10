@@ -11,6 +11,7 @@ class Measurement(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     room_id: Mapped[int] = mapped_column(Integer, ForeignKey("rooms.id"), nullable=False)
+    sub_location: Mapped[str] = mapped_column(String(50), nullable=True)
     temperature: Mapped[float] = mapped_column(Float, nullable=True)
     relative_humidity: Mapped[float] = mapped_column(Float, nullable=True)
     co2: Mapped[float] = mapped_column(Float, nullable=True)

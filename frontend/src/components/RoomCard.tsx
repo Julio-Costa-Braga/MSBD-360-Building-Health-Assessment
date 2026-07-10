@@ -14,6 +14,13 @@ const PILLAR_LABELS: Record<string, string> = {
   visual: 'Evidências',
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  excellent: 'Excelente',
+  acceptable: 'Aceitável',
+  needs_intervention: 'Necessita Intervenção',
+  high_risk: 'Risco Elevado',
+}
+
 export default function RoomCard({ room }: RoomCardProps) {
   return (
     <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
@@ -21,7 +28,7 @@ export default function RoomCard({ room }: RoomCardProps) {
         <ISAGauge score={room.overall_score} size={100} />
         <div>
           <h3 className="text-lg font-semibold">{room.room_name}</h3>
-          <p className="text-sm text-gray-500 capitalize">{room.category}</p>
+          <p className="text-sm text-gray-500">{CATEGORY_LABELS[room.category] || room.category}</p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2">

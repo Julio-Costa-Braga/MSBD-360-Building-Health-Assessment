@@ -48,6 +48,7 @@ export interface RoomCreate {
 export interface Measurement {
   id: number
   room_id: number
+  sub_location: string | null
   temperature: number | null
   relative_humidity: number | null
   co2: number | null
@@ -59,6 +60,7 @@ export interface Measurement {
 }
 
 export interface MeasurementCreate {
+  sub_location?: string | null
   temperature?: number | null
   relative_humidity?: number | null
   co2?: number | null

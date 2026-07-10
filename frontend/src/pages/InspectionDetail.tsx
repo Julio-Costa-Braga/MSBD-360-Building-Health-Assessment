@@ -1,10 +1,32 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { Download, Plus, Trash2 } from 'lucide-react'
 import api from '../api/client'
 import { Inspection, Room, Measurement, ISAResult } from '../types'
 import ISAGauge from '../components/ISAGauge'
 import RoomCard from '../components/RoomCard'
+
+const ROOM_TYPES: Record<string, string> = {
+  bedroom: 'Quarto',
+  living_room: 'Sala de Estar',
+  kitchen: 'Cozinha',
+  bathroom: 'Banheiro',
+  office: 'Escritório',
+  hallway: 'Corredor',
+  basement: 'Porão',
+  attic: 'Sótão',
+  other: 'Outro',
+}
+
+const SUB_LOCATIONS = [
+  { value: '', label: 'Geral (cômodo inteiro)' },
+  { value: 'wall_1', label: 'Parede 1' },
+  { value: 'wall_2', label: 'Parede 2' },
+  { value: 'wall_3', label: 'Parede 3' },
+  { value: 'wall_4', label: 'Parede 4' },
+  { value: 'ceiling', label: 'Teto' },
+  { value: 'floor', label: 'Chão' },
+]
 
 export default function InspectionDetail() {
   const { id } = useParams<{ id: string }>()
@@ -14,6 +36,8 @@ export default function InspectionDetail() {
   const [activeRoom, setActiveRoom] = useState<number | null>(null)
   const [measurements, setMeasurements] = useState<Measurement[]>([])
   const [loading, setLoading] = useState(true)
+  const [subLocation, setSubLocation] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const fetchInspection = () => {
     api.get(`/inspections/${id}`).then((res) => setInspection(res.data))
@@ -57,15 +81,32 @@ export default function InspectionDetail() {
   useEffect(() => {
     if (activeRoom !== null) {
       fetchMeasurements(activeRoom)
+      setSubLocation('')
     }
   }, [activeRoom])
 
   const handleAddRoom = async () => {
     const name = prompt('Nome do cômodo:')
     if (!name) return
-    const type = prompt('Tipo (bedroom, living_room, kitchen, bathroom, office, hallway, basement, attic, other):', 'other')
-    if (!type) return
-    await api.post(`/inspections/${id}/rooms`, { name, room_type: type, floor_level: 0 })
+    const typeMap: Record<string, string> = {
+      'quarto': 'bedroom',
+      'sala': 'living_room',
+      'cozinha': 'kitchen',
+      'banheiro': 'bathroom',
+      'escritorio': 'office',
+      'corredor': 'hallway',
+      'porao': 'basement',
+      'sotao': 'attic',
+      'outro': 'other',
+    }
+    const typeInput = prompt(
+      'Tipo do cômodo:\n' +
+      'quarto / sala / cozinha / banheiro / escritorio / corredor / porao / sotao / outro',
+      'quarto'
+    )
+    if (!typeInput) return
+    const roomType = typeMap[typeInput.toLowerCase().trim()] || typeInput
+    await api.post(`/inspections/${id}/rooms`, { name, room_type: roomType, floor_level: 0 })
     fetchRooms()
   }
 
@@ -76,24 +117,37 @@ export default function InspectionDetail() {
     fetchRooms()
   }
 
+  const getVal = (id: string): number | null => {
+    const el = document.getElementById(id) as HTMLInputElement | null
+    if (!el) return null
+    const val = el.value.trim()
+    if (val === '') return null
+    const num = parseFloat(val)
+    return isNaN(num) ? null : num
+  }
+
   const handleSaveMeasurement = async () => {
     if (activeRoom === null) return
-    const m: Record<string, any> = {}
-    const fields = ['temperature', 'relative_humidity', 'co2', 'surface_temperature', 'material_moisture', 'illuminance', 'observations']
-    for (const field of fields) {
-      const input = document.getElementById(`meas-${field}`) as HTMLInputElement | HTMLTextAreaElement | null
-      if (input) {
-        const val = input.value.trim()
-        if (field === 'observations') {
-          m[field] = val || null
-        } else {
-          m[field] = val !== '' ? parseFloat(val) : null
-        }
+    setSaving(true)
+    try {
+      const m: Record<string, any> = {
+        sub_location: subLocation || null,
+        temperature: getVal('meas-temperature'),
+        relative_humidity: getVal('meas-relative_humidity'),
+        co2: getVal('meas-co2'),
+        surface_temperature: getVal('meas-surface_temperature'),
+        material_moisture: getVal('meas-material_moisture'),
+        illuminance: getVal('meas-illuminance'),
+        observations: (document.getElementById('meas-observations') as HTMLTextAreaElement)?.value?.trim() || null,
       }
+      await api.post(`/rooms/${activeRoom}/measurements`, m)
+      fetchMeasurements(activeRoom)
+      fetchISA()
+    } catch (e: any) {
+      alert('Erro ao salvar medição. Verifique os valores digitados.')
+    } finally {
+      setSaving(false)
     }
-    await api.post(`/rooms/${activeRoom}/measurements`, m)
-    fetchMeasurements(activeRoom)
-    fetchISA()
   }
 
   const handleDownloadPDF = () => {
@@ -137,7 +191,7 @@ export default function InspectionDetail() {
       {isaResult && (
         <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
           <div className="flex items-center justify-center mb-4">
-            <ISAGauge score={isaResult.overall_score} size={180} label={`ISA Geral — ${isaResult.category}`} />
+            <ISAGauge score={isaResult.overall_score} size={180} label={`ISA Geral`} />
           </div>
           {isaResult.rooms.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -183,7 +237,9 @@ export default function InspectionDetail() {
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <span className="text-xs opacity-70">{room.room_type}</span>
+                  <span className="text-xs opacity-70">
+                    {ROOM_TYPES[room.room_type] || room.room_type}
+                  </span>
                 </button>
               </li>
             ))}
@@ -196,20 +252,34 @@ export default function InspectionDetail() {
               <h2 className="text-lg font-semibold mb-4">
                 {activeRoomData.name} — Medições
               </h2>
+
+              <div className="mb-4">
+                <label className="block text-sm text-gray-600 mb-1">Local da medição</label>
+                <select
+                  value={subLocation}
+                  onChange={(e) => setSubLocation(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                >
+                  {SUB_LOCATIONS.map((sl) => (
+                    <option key={sl.value} value={sl.value}>{sl.label}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[
-                  { key: 'temperature', label: 'Temperatura (°C)', type: 'number', step: '0.1' },
-                  { key: 'relative_humidity', label: 'Humidade Relativa (%)', type: 'number', step: '0.1' },
-                  { key: 'co2', label: 'CO₂ (ppm)', type: 'number', step: '1' },
-                  { key: 'surface_temperature', label: 'Temp. Superfície (°C)', type: 'number', step: '0.1' },
-                  { key: 'material_moisture', label: 'Humidade dos Materiais (%)', type: 'number', step: '0.1' },
-                  { key: 'illuminance', label: 'Iluminância (lux)', type: 'number', step: '1' },
+                  { key: 'temperature', label: 'Temperatura (°C)', step: '0.1' },
+                  { key: 'relative_humidity', label: 'Humidade Relativa (%)', step: '0.1' },
+                  { key: 'co2', label: 'CO₂ (ppm)', step: '1' },
+                  { key: 'surface_temperature', label: 'Temp. Superfície (°C)', step: '0.1' },
+                  { key: 'material_moisture', label: 'Humidade dos Materiais (%)', step: '0.1' },
+                  { key: 'illuminance', label: 'Iluminância (lux)', step: '1' },
                 ].map((field) => (
                   <div key={field.key}>
                     <label className="block text-sm text-gray-600 mb-1">{field.label}</label>
                     <input
                       id={`meas-${field.key}`}
-                      type={field.type}
+                      type="number"
                       step={field.step}
                       defaultValue={latestMeas?.[field.key as keyof Measurement] ?? ''}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
@@ -217,6 +287,7 @@ export default function InspectionDetail() {
                   </div>
                 ))}
               </div>
+
               <div className="mt-4">
                 <label className="block text-sm text-gray-600 mb-1">Observações</label>
                 <textarea
@@ -226,23 +297,35 @@ export default function InspectionDetail() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                 />
               </div>
+
               <button
                 onClick={handleSaveMeasurement}
-                className="mt-4 bg-slate-800 text-white px-6 py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors"
+                disabled={saving}
+                className="mt-4 bg-slate-800 text-white px-6 py-2 rounded-lg text-sm hover:bg-slate-700 disabled:opacity-50 transition-colors"
               >
-                Salvar Medição
+                {saving ? 'Salvando...' : 'Salvar Medição'}
               </button>
 
-              {measurements.length > 1 && (
+              {measurements.length > 0 && (
                 <div className="mt-6">
-                  <h3 className="text-sm font-semibold text-gray-500 mb-2">Histórico</h3>
-                  <div className="max-h-40 overflow-y-auto space-y-1">
-                    {[...measurements].reverse().slice(0, 10).map((m) => (
-                      <div key={m.id} className="text-xs text-gray-500 flex gap-4 border-b border-gray-100 py-1">
-                        <span>{new Date(m.measured_at).toLocaleString('pt-BR')}</span>
+                  <h3 className="text-sm font-semibold text-gray-500 mb-2">
+                    Histórico ({measurements.length} medições)
+                  </h3>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {[...measurements].reverse().slice(0, 20).map((m) => (
+                      <div key={m.id} className="text-xs text-gray-500 flex gap-3 border-b border-gray-100 py-1">
+                        <span className="text-gray-400 w-20 shrink-0">
+                          {new Date(m.measured_at).toLocaleTimeString('pt-BR')}
+                        </span>
+                        {m.sub_location && (
+                          <span className="text-blue-500 w-16 shrink-0">
+                            {SUB_LOCATIONS.find(sl => sl.value === m.sub_location)?.label || m.sub_location}
+                          </span>
+                        )}
                         <span>{m.temperature ?? '—'}°C</span>
-                        <span>{m.relative_humidity ?? '—'}% RH</span>
-                        <span>{m.co2 ?? '—'} ppm</span>
+                        <span>{m.relative_humidity ?? '—'}%</span>
+                        <span>{m.co2 ?? '—'}ppm</span>
+                        <span>{m.illuminance ?? '—'}lux</span>
                       </div>
                     ))}
                   </div>

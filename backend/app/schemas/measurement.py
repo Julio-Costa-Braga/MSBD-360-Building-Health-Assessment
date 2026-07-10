@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class MeasurementCreate(BaseModel):
+    sub_location: str | None = None
     temperature: float | None = Field(None, ge=-10, le=60)
     relative_humidity: float | None = Field(None, ge=0, le=100)
     co2: float | None = Field(None, ge=0, le=10000)
@@ -14,6 +15,7 @@ class MeasurementCreate(BaseModel):
 
 
 class MeasurementUpdate(BaseModel):
+    sub_location: str | None = None
     temperature: float | None = Field(None, ge=-10, le=60)
     relative_humidity: float | None = Field(None, ge=0, le=100)
     co2: float | None = Field(None, ge=0, le=10000)
@@ -26,6 +28,7 @@ class MeasurementUpdate(BaseModel):
 class MeasurementRead(BaseModel):
     id: int
     room_id: int
+    sub_location: str | None
     temperature: float | None
     relative_humidity: float | None
     co2: float | None
