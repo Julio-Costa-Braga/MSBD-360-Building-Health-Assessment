@@ -14,20 +14,24 @@ router = APIRouter(prefix="/inspections/{inspection_id}/reports", tags=["Reports
 calculator = ISACalculator()
 
 
-@router.get("/isa")
-def get_isa(inspection_id: int, db: Session = Depends(get_db)):
-    inspection = db.query(Inspection).filter(Inspection.id == inspection_id).first()
-    if not inspection:
-        raise HTTPException(404, "Inspeção não encontrada")
-
+def _build_rooms_data(inspection_id: int, db: Session, include_photos: bool = False) -> list[dict]:
     rooms = db.query(Room).filter(Room.inspection_id == inspection_id).all()
     rooms_data = []
     for room in rooms:
         measurements = db.query(Measurement).filter(Measurement.room_id == room.id).all()
-        photos = db.query(Photo).filter(Photo.room_id == room.id).all()
+        photos_qs = db.query(Photo).filter(Photo.room_id == room.id).all()
+        photos = []
+        for p in photos_qs:
+            photo_entry = {"id": p.id}
+            if include_photos:
+                photo_entry["photo_data"] = p.photo_data
+                photo_entry["photo_type"] = p.photo_type
+                photo_entry["caption"] = p.caption
+            photos.append(photo_entry)
         rooms_data.append({
             "id": room.id,
             "name": room.name,
+            "room_type": room.room_type,
             "measurements": [
                 {
                     "temperature": m.temperature,
@@ -37,12 +41,22 @@ def get_isa(inspection_id: int, db: Session = Depends(get_db)):
                     "material_moisture": m.material_moisture,
                     "illuminance": m.illuminance,
                     "observations": m.observations,
+                    "sub_location": m.sub_location,
                 }
                 for m in measurements
             ],
-            "photos": [{"id": p.id} for p in photos],
+            "photos": photos,
         })
+    return rooms_data
 
+
+@router.get("/isa")
+def get_isa(inspection_id: int, db: Session = Depends(get_db)):
+    inspection = db.query(Inspection).filter(Inspection.id == inspection_id).first()
+    if not inspection:
+        raise HTTPException(404, "Inspeção não encontrada")
+
+    rooms_data = _build_rooms_data(inspection_id, db)
     result = calculator.calculate_inspection(rooms_data)
 
     inspection.overall_isa_score = result["overall_score"]
@@ -57,30 +71,7 @@ def get_isa_by_type(inspection_id: int, db: Session = Depends(get_db)):
     if not inspection:
         raise HTTPException(404, "Inspeção não encontrada")
 
-    rooms = db.query(Room).filter(Room.inspection_id == inspection_id).all()
-    rooms_data = []
-    for room in rooms:
-        measurements = db.query(Measurement).filter(Measurement.room_id == room.id).all()
-        photos = db.query(Photo).filter(Photo.room_id == room.id).all()
-        rooms_data.append({
-            "id": room.id,
-            "name": room.name,
-            "room_type": room.room_type,
-            "measurements": [
-                {
-                    "temperature": m.temperature,
-                    "relative_humidity": m.relative_humidity,
-                    "co2": m.co2,
-                    "surface_temperature": m.surface_temperature,
-                    "material_moisture": m.material_moisture,
-                    "illuminance": m.illuminance,
-                    "observations": m.observations,
-                }
-                for m in measurements
-            ],
-            "photos": [{"id": p.id} for p in photos],
-        })
-
+    rooms_data = _build_rooms_data(inspection_id, db)
     result = calculator.calculate_by_room_type(rooms_data)
     return result
 
@@ -91,29 +82,7 @@ def download_pdf(inspection_id: int, db: Session = Depends(get_db)):
     if not inspection:
         raise HTTPException(404, "Inspeção não encontrada")
 
-    rooms = db.query(Room).filter(Room.inspection_id == inspection_id).all()
-    rooms_data = []
-    for room in rooms:
-        measurements = db.query(Measurement).filter(Measurement.room_id == room.id).all()
-        photos = db.query(Photo).filter(Photo.room_id == room.id).all()
-        rooms_data.append({
-            "id": room.id,
-            "name": room.name,
-            "measurements": [
-                {
-                    "temperature": m.temperature,
-                    "relative_humidity": m.relative_humidity,
-                    "co2": m.co2,
-                    "surface_temperature": m.surface_temperature,
-                    "material_moisture": m.material_moisture,
-                    "illuminance": m.illuminance,
-                    "observations": m.observations,
-                }
-                for m in measurements
-            ],
-            "photos": [{"id": p.id} for p in photos],
-        })
-
+    rooms_data = _build_rooms_data(inspection_id, db, include_photos=True)
     isa_result = calculator.calculate_inspection(rooms_data)
 
     insp_date = inspection.inspection_date
@@ -130,7 +99,7 @@ def download_pdf(inspection_id: int, db: Session = Depends(get_db)):
         "inspection_date": formatted_date,
     }
 
-    pdf_bytes = generate_report(insp_dict, isa_result)
+    pdf_bytes = generate_report(insp_dict, isa_result, rooms_data)
 
     return Response(
         content=pdf_bytes,
